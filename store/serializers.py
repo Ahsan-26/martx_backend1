@@ -37,17 +37,79 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ['id', 'title', 'description', 'slug', 'inventory',
-                  'unit_price', 'price_with_tax', 'collection', 'images', 'vendor', 'average_rating']
+                  'unit_price', 'price_with_tax', 'collection', 'images', 'vendor', 'average_rating', 'reviews_breakdown']
 
     price_with_tax = serializers.SerializerMethodField(
         method_name='calculate_tax')
 
     def calculate_tax(self, product: Product):
         return product.unit_price * Decimal(1.1)
+    
+    def create(self, validated_data):
+        images_data = self.context.get('request').FILES
+        product = Product.objects.create(**validated_data)
+        for image_data in images_data.getlist('images'):
+            ProductImage.objects.create(product=product, image=image_data)
+        return product
+
+    def update(self, instance, validated_data):
+        images_data = self.context.get('request').FILES
+        
+        # Update standard fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Handle images if provided
+        if images_data.getlist('images'):
+             # Optional: clear old images? Or append? Let's append for now or strict replace?
+             # User prompt implies "Add Product" and "Update Product". 
+             # For update, typically we add to existing or replace. 
+             # Let's keep existing and add new ones for now, or clear if needed.
+             # Given "Update images for existing products", usually implies replacement or addition.
+             # Let's just add for now.
+             for image_data in images_data.getlist('images'):
+                 ProductImage.objects.create(product=instance, image=image_data)
+        
+        return instance
 
     def get_average_rating(self, product: Product):
         # Assuming `average_rating` is calculated as an aggregation of related reviews
         return product.reviews.aggregate(average=Avg('rating'))['average'] or 0.0
+
+    reviews_breakdown = serializers.SerializerMethodField()
+
+    def get_reviews_breakdown(self, product: Product):
+        reviews = product.reviews.all()
+        total_reviews = reviews.count()
+        if total_reviews == 0:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0.0,
+                "sentiment_counts": {"positive": 0, "neutral": 0, "negative": 0},
+                "sentiment_percentages": {"positive": 0, "neutral": 0, "negative": 0}
+            }
+        
+        # Calculate sentiment counts
+        positive = reviews.filter(sentiment='positive').count()
+        neutral = reviews.filter(sentiment='neutral').count()
+        negative = reviews.filter(sentiment='negative').count()
+        
+        # Calculate percentages
+        return {
+            "total_reviews": total_reviews,
+            "average_rating": self.get_average_rating(product),
+            "sentiment_counts": {
+                "positive": positive,
+                "neutral": neutral,
+                "negative": negative
+            },
+            "sentiment_percentages": {
+                "positive": round((positive / total_reviews) * 100, 1),
+                "neutral": round((neutral / total_reviews) * 100, 1),
+                "negative": round((negative / total_reviews) * 100, 1)
+            }
+        }
 
 class SimpleProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -56,9 +118,11 @@ class SimpleProductSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+
     class Meta:
         model = Review
-        fields = ['id', 'date', 'name', 'description', 'sentiment', 'confidence']
+        fields = ['id', 'date', 'name', 'description', 'rating', 'sentiment', 'confidence']
 
     def create(self, validated_data):
         product_id = self.context['product_id']
@@ -147,10 +211,39 @@ class VendorImageSerializer(serializers.ModelSerializer):
 
 class VendorSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
+    vendor_stats = serializers.SerializerMethodField()
 
     class Meta:
         model = Vendor
-        fields = ['id', 'name','user', 'email', 'phone','images', 'shop_name', 'shop_description', 'shop_address', 'average_rating']
+        fields = ['id', 'name','user', 'email', 'phone','images', 'shop_name', 'shop_description', 'shop_address', 'average_rating', 'vendor_stats']
+
+    def get_vendor_stats(self, vendor):
+        # Aggregate stats from all products of this vendor
+        products = vendor.products.all()
+        # Flat list of all reviews for this vendor's products
+        all_reviews = Review.objects.filter(product__in=products)
+        total_reviews = all_reviews.count()
+        
+        if total_reviews == 0:
+             return {
+                "total_reviews": 0,
+                "average_rating": 0.0,
+                "sentiment_percentages": {"positive": 0, "neutral": 0, "negative": 0}
+            }
+
+        positive = all_reviews.filter(sentiment='positive').count()
+        neutral = all_reviews.filter(sentiment='neutral').count()
+        negative = all_reviews.filter(sentiment='negative').count()
+
+        return {
+            "total_reviews": total_reviews,
+            "average_rating": vendor.average_rating(),
+            "sentiment_percentages": {
+                "positive": round((positive / total_reviews) * 100, 1),
+                "neutral": round((neutral / total_reviews) * 100, 1),
+                "negative": round((negative / total_reviews) * 100, 1)
+            }
+        }
 
     def get_average_rating(self, obj):
         return obj.average_rating()
