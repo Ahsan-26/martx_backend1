@@ -19,7 +19,6 @@ from django.contrib import admin
 from django.urls import path, include
 import debug_toolbar
 from .views import logout
-from core.views_currency import get_exchange_rates
 
 admin.site.site_header = 'Storefront Admin'
 admin.site.index_title = 'Admin'
@@ -35,7 +34,6 @@ urlpatterns = [
     path('auth/', include('djoser.urls.jwt')),
     path('auth/', include('core.urls')),
     path('auth/logout/', logout, name='logout'),
-    path('currency/rates/', get_exchange_rates, name='currency_rates'),
     path('__debug__/', include(debug_toolbar.urls)),
 ]  
 if settings.DEBUG:
