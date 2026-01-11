@@ -131,6 +131,10 @@ class ReviewSerializer(serializers.ModelSerializer):
         # Analyze sentiment
         sentiment, confidence = analyze_sentiment(description)
         
+        # Remove sentiment/confidence if they exist in validated_data to avoid overrides
+        validated_data.pop('sentiment', None)
+        validated_data.pop('confidence', None)
+        
         return Review.objects.create(
             product_id=product_id, 
             sentiment=sentiment, 

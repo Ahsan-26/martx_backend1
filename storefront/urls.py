@@ -33,6 +33,7 @@ urlpatterns = [
     path('', include('payments.urls')),
     path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.jwt')),
+    path('auth/', include('core.urls')),
     path('auth/logout/', logout, name='logout'),
     path('currency/rates/', get_exchange_rates, name='currency_rates'),
     path('__debug__/', include(debug_toolbar.urls)),
