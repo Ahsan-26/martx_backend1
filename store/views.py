@@ -24,7 +24,6 @@ import logging
 from store.models import Customer
 
 class ProductViewSet(ModelViewSet):
-    queryset = Product.objects.prefetch_related("images").all()
     serializer_class = ProductSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class = ProductFilter
@@ -32,6 +31,29 @@ class ProductViewSet(ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     search_fields = ['title', 'description']
     ordering_fields = ['unit_price', 'last_update']
+
+    def get_queryset(self):
+        queryset = Product.objects.prefetch_related("images").all()
+        vendor_param = self.request.query_params.get('vendor')
+        
+        if vendor_param == 'me' and self.request.user.is_authenticated:
+            try:
+                vendor = Vendor.objects.get(user=self.request.user)
+                return queryset.filter(vendor=vendor)
+            except Vendor.DoesNotExist:
+                return queryset.none()
+        
+        return queryset
+
+    def perform_create(self, serializer):
+        if self.request.user.is_authenticated:
+            try:
+                vendor = Vendor.objects.get(user=self.request.user)
+                serializer.save(vendor=vendor)
+            except Vendor.DoesNotExist:
+                serializer.save()
+        else:
+            serializer.save()
 
     def get_serializer_context(self):
         return {'request': self.request}
@@ -283,17 +305,21 @@ class OrderViewSet(ModelViewSet):
         elif self.request.method == 'PATCH':
             return UpdateOrderSerializer
         return OrderSerializer
+    pagination_class = DefaultPagination
+
     def get_queryset(self):
         user = self.request.user
 
-        if user.is_staff:
+        if user.is_superuser:
             return Order.objects.all()
 
         if user.is_authenticated:
-            customer_id = Customer.objects.only('id').get(user_id=user.id)
-            return Order.objects.filter(customer_id=customer_id)
+            try:
+                customer = Customer.objects.only('id').get(user_id=user.id)
+                return Order.objects.filter(customer=customer)
+            except Customer.DoesNotExist:
+                return Order.objects.none()
 
-        # For guest users, returning none as they cannot view their orders unless implemented separately
         return Order.objects.none()
 
 

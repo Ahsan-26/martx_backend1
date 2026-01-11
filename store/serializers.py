@@ -434,6 +434,9 @@ class CreateOrderSerializer(serializers.Serializer):
                     payment_status = Payment.PENDING  # Default for 'stripe' or other methods
 
 
+                # Refresh order to ensure items are recognized for total calculation
+                order.refresh_from_db()
+
                 payment = Payment.objects.create(
                     order=order,
                     amount=order.calculate_total_amount(),
@@ -442,6 +445,10 @@ class CreateOrderSerializer(serializers.Serializer):
                 )
 
             # Step 4: Trigger order_created signal (if needed)
+            # Ensure order is refreshed before sending signal
+            if order.items.count() == 0:
+                order.refresh_from_db()
+
             order_created.send_robust(self.__class__, order=order)
 
             return order
@@ -496,6 +503,9 @@ class AuthenticatedOrderSerializer(serializers.Serializer):
             payment_status = Payment.PENDING
         else:
             payment_status = Payment.PENDING
+
+        # Refresh order to ensure total_amount calculation includes items
+        order.refresh_from_db()
 
         payment = Payment.objects.create(
             order=order,
@@ -568,6 +578,9 @@ class GuestOrderSerializer(serializers.Serializer):
             payment_status = Payment.PENDING  # COD payments are initially pending
         else:
             payment_status = Payment.PENDING  # Set for 'stripe' or other methods
+
+        # Refresh order to ensure total_amount calculation includes items
+        order.refresh_from_db()
 
         payment = Payment.objects.create(
             order=order,
