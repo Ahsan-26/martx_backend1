@@ -283,10 +283,35 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ['id', 'customer', 'placed_at', 'payment_status', 'items', 'total']
 
     def get_total(self, order):
-        """
-        Calculate the total price of the order.
-        """
         return sum(item.quantity * item.unit_price for item in order.items.all())
+
+class VendorOrderItemSerializer(serializers.ModelSerializer):
+    product_title = serializers.CharField(source='product.title')
+    
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product_title', 'unit_price', 'quantity']
+
+class VendorOrderSerializer(serializers.ModelSerializer):
+    items = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
+    buyer_name = serializers.CharField(source='customer.user.get_full_name')
+    buyer_email = serializers.EmailField(source='customer.user.email')
+    payment_status = serializers.CharField(source='get_payment_status_display')
+
+    class Meta:
+        model = Order
+        fields = ['id', 'placed_at', 'payment_status', 'items', 'total', 'buyer_name', 'buyer_email']
+
+    def get_items(self, order):
+        vendor = self.context.get('vendor')
+        items = order.items.filter(product__vendor=vendor)
+        return VendorOrderItemSerializer(items, many=True).data
+
+    def get_total(self, order):
+        vendor = self.context.get('vendor')
+        items = order.items.filter(product__vendor=vendor)
+        return sum(item.quantity * item.unit_price for item in items)
 class UpdateOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order

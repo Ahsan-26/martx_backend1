@@ -19,7 +19,7 @@ from .models import Cart, CartItem, Collection, Customer, Order, OrderItem, Prod
 from .serializers import AddCartItemSerializer, CartItemSerializer, CartSerializer, CollectionSerializer, \
     CreateOrderSerializer, CustomerSerializer, OrderSerializer, ProductSerializer, ReviewSerializer, \
     UpdateCartItemSerializer, UpdateOrderSerializer, ProductImageSerializer, VendorSerializer, VendorImageSerializer, \
-    AuthenticatedOrderSerializer, GuestOrderSerializer
+    AuthenticatedOrderSerializer, GuestOrderSerializer, VendorOrderSerializer
 import logging
 from store.models import Customer
 
@@ -114,6 +114,15 @@ class VendorViewSet(ModelViewSet):
         products = vendor.products.all()
         serializer = ProductSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            vendor = Vendor.objects.get(user=request.user)
+            serializer = VendorSerializer(vendor, context={'request': request})
+            return Response(serializer.data)
+        except Vendor.DoesNotExist:
+            return Response({'error': 'Vendor profile not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 class CustomerViewSet(ModelViewSet):
     queryset = Customer.objects.all()
@@ -349,7 +358,7 @@ class GuestOrderView(APIView):
 
 
 class VendorOrderViewSet(ModelViewSet):
-    serializer_class = OrderSerializer
+    serializer_class = VendorOrderSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -358,6 +367,10 @@ class VendorOrderViewSet(ModelViewSet):
 
         # Get the orders for products that belong to this vendor
         return Order.objects.filter(items__product__vendor=vendor).distinct()
+
+    def get_serializer_context(self):
+        vendor = Vendor.objects.get(user=self.request.user)
+        return {'vendor': vendor, 'request': self.request}
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def update_status(self, request, pk=None):
