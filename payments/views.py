@@ -57,12 +57,19 @@ def create_payment_intent(request):
 
         # Retrieve the order and calculate total amount
         order = Order.objects.get(id=order_id)
-        total_amount = order.calculate_total_amount() * 100  # Convert to cents for Stripe
+        total_amount_cents = int(order.calculate_total_amount() * 100)  # Convert to cents for Stripe
+
+        # Validation: Ensure the amount meets Stripe's minimum requirements (50 cents for USD)
+        if total_amount_cents < 50:
+            if total_amount_cents == 0:
+                return Response({'error': 'Order total cannot be zero.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': f'The total amount (Rs {order.calculate_total_amount()}) is below Stripe\'s minimum charge limit (approx $0.50). Please add more items to your cart or choose Cash on Delivery.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Create a PaymentIntent with Stripe
-        print(stripe.api_key)
         intent = stripe.PaymentIntent.create(
-            amount=int(total_amount),  # Amount in cents
+            amount=total_amount_cents,
             currency='usd',
             metadata={'order_id': order_id}
         )

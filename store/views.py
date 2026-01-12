@@ -272,24 +272,32 @@ class OrderViewSet(ModelViewSet):
         # Save the order (this will handle the logic of both authenticated and guest users)
         order = serializer.save()
 
-        # Get payment method from the request
-        payment_method = request.data.get('payment_method', 'stripe')  # Default to 'stripe' if not provided
+        # Ensure the order object has the latest data from the DB, including its items
+        order.refresh_from_db()
 
-        if payment_method.lower() == 'cod':
-            # If the payment method is Cash on Delivery (COD)
-            payment_status = Payment.PENDING  # COD payments are typically marked as 'pending' initially
-            payment_method = 'COD'
+        # Get payment method from the request
+        payment_method = request.data.get('payment_method', 'stripe').lower()
+
+        # Calculate total amount
+        total_amount = order.calculate_total_amount()
+
+        # Validation: Ensure total amount is greater than zero
+        if total_amount <= 0:
+            return Response({'error': 'Order total must be greater than zero.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if payment_method == 'cod':
+            payment_status = Payment.PENDING
+            payment_method_display = 'COD'
         else:
-            # For other payment methods like Stripe, default to 'stripe' logic
-            payment_status = Payment.PENDING  # Adjust as needed
+            payment_status = Payment.PENDING
+            payment_method_display = 'stripe'
 
         # Create a new payment record for the order
-        total_amount = order.calculate_total_amount()  # Ensure this method exists in your Order model
-        payment = Payment.objects.create(
+        Payment.objects.create(
             order=order,
             amount=total_amount,
             status=payment_status,
-            payment_method=payment_method
+            payment_method=payment_method_display
         )
 
         # Serialize the order for response

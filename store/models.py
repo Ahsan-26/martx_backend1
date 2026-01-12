@@ -4,7 +4,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from uuid import uuid4
 
-from django.db.models import Avg
+from django.db.models import Avg, Sum, F
 
 from .validators import validate_file_size
 
@@ -118,7 +118,11 @@ class Order(models.Model):
         ]
 
     def calculate_total_amount(self):
-        return sum(item.unit_price * item.quantity for item in self.items.all())  # Calculate total from OrderItems
+        # Calculate total from OrderItems using database aggregation for reliability
+        result = self.items.aggregate(
+            total=Sum(F('unit_price') * F('quantity'))
+        )
+        return result['total'] or 0
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='items')

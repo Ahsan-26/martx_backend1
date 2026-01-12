@@ -60,21 +60,25 @@ class LikeBasedRecommendationView(APIView):
         return Response(serializer.data)
     
 class WishlistView(APIView):
-        permission_classes = [IsAuthenticated]
-        def get(self, request):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
         # Fetch liked items for the current user
-             liked_items = LikedItem.objects.filter(
+        liked_items = LikedItem.objects.filter(
             user=request.user,
             content_type=ContentType.objects.get_for_model(Product)
         )
         
         # Extract product IDs from liked items
-             liked_product_ids = liked_items.values_list('object_id', flat=True)
+        liked_product_ids = liked_items.values_list('object_id', flat=True)
 
-        # Fetch products using the extracted IDs
-             products = Product.objects.filter(id__in=liked_product_ids)
+        # Fetch products with prefetched images for efficiency
+        # CRITICAL: prefetch_related ensures images are included in the query
+        products = Product.objects.filter(id__in=liked_product_ids).prefetch_related('images')
         
         # Serialize the product data
-             serializer = ProductSerializer(products, many=True)
+        # CRITICAL: context={'request': request} ensures image URLs are absolute (http://...)
+        # Without this, images would be relative paths and fail to load in the frontend
+        serializer = ProductSerializer(products, many=True, context={'request': request})
          
-             return Response(serializer.data)
+        return Response(serializer.data)

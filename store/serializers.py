@@ -414,36 +414,6 @@ class CreateOrderSerializer(serializers.Serializer):
                 # else:
                 #     order = existing_orders.first()
 
-            # Step 3: Handle payment creation or retry logic
-            existing_payment = Payment.objects.filter(order=order).first()
-
-            if existing_payment:
-                if existing_payment.status == Payment.COMPLETED:
-                    raise serializers.ValidationError(f"Payment for Order {order.id} has already been completed.")
-                else:
-                    # Retry payment if pending or failed
-                    existing_payment.status = Payment.PENDING
-                    existing_payment.payment_method = payment_method
-                    existing_payment.save()
-                    payment = existing_payment
-            else:
-                # Create a new payment
-                if payment_method == 'cod':
-                    payment_status = Payment.PENDING  # Set COD payments as 'pending'
-                else:
-                    payment_status = Payment.PENDING  # Default for 'stripe' or other methods
-
-
-                # Refresh order to ensure items are recognized for total calculation
-                order.refresh_from_db()
-
-                payment = Payment.objects.create(
-                    order=order,
-                    amount=order.calculate_total_amount(),
-                    status=payment_status,
-                    payment_method=payment_method # Can be changed dynamically based on user's choice
-                )
-
             # Step 4: Trigger order_created signal (if needed)
             # Ensure order is refreshed before sending signal
             if order.items.count() == 0:
@@ -497,22 +467,8 @@ class AuthenticatedOrderSerializer(serializers.Serializer):
             order = Order.objects.create(customer=customer)
             OrderItem.objects.create(order=order, product=product, unit_price=product.unit_price, quantity=quantity)
 
-        # Handle payment creation
-        payment_method = self.validated_data.get('payment_method')
-        if payment_method == 'cod':
-            payment_status = Payment.PENDING
-        else:
-            payment_status = Payment.PENDING
-
         # Refresh order to ensure total_amount calculation includes items
         order.refresh_from_db()
-
-        payment = Payment.objects.create(
-            order=order,
-            amount=order.calculate_total_amount(),
-            status=payment_status,
-            payment_method=payment_method  # Change if necessary
-        )
 
         # Trigger the order_created signal
         order_created.send_robust(self.__class__, order=order)
@@ -572,22 +528,8 @@ class GuestOrderSerializer(serializers.Serializer):
             order = Order.objects.create(customer=customer)
             OrderItem.objects.create(order=order, product=product, unit_price=product.unit_price, quantity=quantity)
 
-        # Handle payment creation
-        payment_method = self.validated_data.get('payment_method')
-        if payment_method == 'cod':
-            payment_status = Payment.PENDING  # COD payments are initially pending
-        else:
-            payment_status = Payment.PENDING  # Set for 'stripe' or other methods
-
         # Refresh order to ensure total_amount calculation includes items
         order.refresh_from_db()
-
-        payment = Payment.objects.create(
-            order=order,
-            amount=order.calculate_total_amount(),
-            status=payment_status,
-            payment_method=payment_method  # Can be changed dynamically based on user's choice
-        )
 
         # Trigger the order_created signal
         order_created.send_robust(self.__class__, order=order)
