@@ -11,12 +11,12 @@
     <h1>Thank you for your order, {{ order.customer.user.first_name }}!</h1>
     <p>Your order has been successfully placed.</p>
     <p><strong>Order ID:</strong> {{ order.id }}</p>
-    <p><strong>Total Amount:</strong> ${{ order.calculate_total_amount }}</p>
+    <p><strong>Total Amount:</strong> Rs. {{ order.calculate_total_amount }}</p>
 
     <h2>Order Details</h2>
     <ul>
         {% for item in order.items.all %}
-        <li>{{ item.product.title }} - {{ item.quantity }} x ${{ item.unit_price }}</li>
+        <li>{{ item.product.title }} - {{ item.quantity }} x Rs. {{ item.unit_price }}</li>
         {% endfor %}
     </ul>
 

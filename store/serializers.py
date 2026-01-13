@@ -278,9 +278,12 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     payment_status = serializers.CharField(source='get_payment_status_display')
     total = serializers.SerializerMethodField()
+    buyer_name = serializers.CharField(source='customer.user.get_full_name')
+    buyer_email = serializers.EmailField(source='customer.user.email')
+
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'placed_at', 'payment_status', 'items', 'total']
+        fields = ['id', 'customer', 'placed_at', 'payment_status', 'items', 'total', 'buyer_name', 'buyer_email']
 
     def get_total(self, order):
         return sum(item.quantity * item.unit_price for item in order.items.all())
